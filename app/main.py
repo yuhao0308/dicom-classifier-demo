@@ -4,13 +4,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.responses import Response
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.config import Settings, get_settings
 
@@ -19,23 +17,53 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 
 
-class UploadSizeLimitMiddleware(BaseHTTPMiddleware):
+class _UploadTooLargeError(Exception):
+    pass
+
+
+class UploadSizeLimitMiddleware:
     def __init__(self, app: ASGIApp, *, settings: Settings) -> None:
-        super().__init__(app)
+        self.app = app
         self._max_upload_size_bytes = settings.max_upload_size_bytes
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        if request.url.path == "/upload":
-            content_length = request.headers.get("content-length")
-            if content_length is not None:
-                try:
-                    content_length_value = int(content_length)
-                except ValueError:
-                    content_length_value = 0
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["path"] != "/upload":
+            await self.app(scope, receive, send)
+            return
 
-                if content_length_value > self._max_upload_size_bytes:
-                    return JSONResponse(status_code=413, content={"detail": "Payload too large."})
-        return await call_next(request)
+        content_length = self._get_content_length(scope)
+        if content_length > self._max_upload_size_bytes:
+            response = JSONResponse(status_code=413, content={"detail": "Payload too large."})
+            await response(scope, receive, send)
+            return
+
+        bytes_received = 0
+
+        async def limited_receive() -> Message:
+            nonlocal bytes_received
+            message = await receive()
+            if message["type"] == "http.request":
+                body = message.get("body", b"")
+                bytes_received += len(body)
+                if bytes_received > self._max_upload_size_bytes:
+                    raise _UploadTooLargeError
+            return message
+
+        try:
+            await self.app(scope, limited_receive, send)
+        except _UploadTooLargeError:
+            response = JSONResponse(status_code=413, content={"detail": "Payload too large."})
+            await response(scope, receive, send)
+
+    @staticmethod
+    def _get_content_length(scope: Scope) -> int:
+        for header_name, header_value in scope["headers"]:
+            if header_name.lower() == b"content-length":
+                try:
+                    return int(header_value.decode("latin-1"))
+                except ValueError:
+                    return 0
+        return 0
 
 
 @asynccontextmanager
