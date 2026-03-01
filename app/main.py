@@ -11,6 +11,8 @@ from fastapi.templating import Jinja2Templates
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.config import Settings, get_settings
+from app.routes.upload import router as upload_router
+from app.services.storage import ensure_temp_dir
 
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = BASE_DIR / "templates"
@@ -68,7 +70,9 @@ class UploadSizeLimitMiddleware:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    app.state.settings = get_settings()
+    settings = get_settings()
+    app.state.settings = settings
+    ensure_temp_dir(settings)
     # Startup hook reserved for model loading and temp-dir initialization.
     yield
     # Shutdown hook reserved for temp file cleanup and resource teardown.
@@ -80,6 +84,7 @@ def create_app() -> FastAPI:
     app.add_middleware(UploadSizeLimitMiddleware, settings=settings)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     app.state.templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+    app.include_router(upload_router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

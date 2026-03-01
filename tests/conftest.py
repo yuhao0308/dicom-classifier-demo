@@ -1,17 +1,23 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.config import get_settings
 from app.main import create_app
 
 
 @pytest.fixture
-def app() -> FastAPI:
-    return create_app()
+def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FastAPI:
+    monkeypatch.setenv("TEMP_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    test_app = create_app()
+    yield test_app
+    get_settings.cache_clear()
 
 
 @pytest.fixture
