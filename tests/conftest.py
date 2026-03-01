@@ -12,7 +12,7 @@ from app.main import create_app
 
 
 @pytest.fixture
-def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FastAPI:
+def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[FastAPI]:
     monkeypatch.setenv("TEMP_DIR", str(tmp_path))
     get_settings.cache_clear()
     test_app = create_app()
