@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Results {{ job_id }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>Analysis Results</h1>
+      <p class="job-id">Job ID: {{ job_id }}</p>
+    </header>
+
+    <section class="disclaimer-banner" role="note" aria-label="Disclaimer">
+      {{ disclaimer }}
+    </section>
+
+    <section class="summary">
+      <p>Total slices: {{ total_slices }}</p>
+      <p>Abnormal slices: {{ abnormal_slices|length }}</p>
+    </section>
+
+    {% if abnormal_slices %}
+    <section class="findings-grid">
+      {% for item in abnormal_slices %}
+      <article class="finding-card">
+        <img src="{{ item.image_url }}" alt="Annotated slice {{ item.slice_index }}">
+        <div class="finding-content">
+          <h2>Slice {{ item.slice_index }}</h2>
+          <p>{{ item.finding }}</p>
+          <p class="confidence">Confidence: {{ '%.2f'|format(item.confidence) }}</p>
+        </div>
+      </article>
+      {% endfor %}
+    </section>
+    {% else %}
+    <p class="no-findings">No abnormal slices passed the postprocessing threshold.</p>
+    {% endif %}
+  </main>
+</body>
+</html>

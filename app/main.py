@@ -11,6 +11,8 @@ from fastapi.templating import Jinja2Templates
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.config import Settings, get_settings
+from app.routes.jobs import router as jobs_router
+from app.routes.results import router as results_router
 from app.routes.upload import router as upload_router
 from app.services.inference import load_model
 from app.services.storage import ensure_temp_dir
@@ -84,11 +86,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    ensure_temp_dir(settings)
     app = FastAPI(title="DICOM Classifier Demo", lifespan=lifespan)
     app.add_middleware(UploadSizeLimitMiddleware, settings=settings)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    app.mount("/job-media", StaticFiles(directory=str(settings.temp_dir)), name="job-media")
     app.state.templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     app.include_router(upload_router)
+    app.include_router(jobs_router)
+    app.include_router(results_router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:
