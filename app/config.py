@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     temp_retention_seconds: int = 3600
     log_level: str = "INFO"
     max_upload_size_mb: int = 500
+    inference_batch_size: int = 8
 
     @property
     def max_upload_size_bytes(self) -> int:
