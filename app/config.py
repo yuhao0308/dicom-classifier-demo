@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     model_path: Path = Path("models/classifier.pt")
     max_slices: int = 100
     use_gpu: bool = False
-    temp_dir: Path = Path("/tmp/dicom-demo")
+    temp_dir: Path = Path("/tmp/dicom-demo")  # noqa: S108
     temp_retention_seconds: int = 3600
     log_level: str = "INFO"
     max_upload_size_mb: int = 500

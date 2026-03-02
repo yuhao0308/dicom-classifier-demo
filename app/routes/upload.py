@@ -58,9 +58,7 @@ async def upload(
         raise HTTPException(status_code=400, detail="No file was uploaded.")
 
     settings = (
-        request.app.state.settings
-        if hasattr(request.app.state, "settings")
-        else get_settings()
+        request.app.state.settings if hasattr(request.app.state, "settings") else get_settings()
     )
     archive_payload = await file.read()
 

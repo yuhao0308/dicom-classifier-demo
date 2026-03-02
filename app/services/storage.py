@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -40,9 +40,7 @@ def write_job_metadata(
     slice_count: int,
     progress: int = 0,
 ) -> Path:
-    created_at = (
-        datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    )
+    created_at = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     metadata = {
         "job_id": job_id,
         "status": status,

@@ -7,9 +7,7 @@ from app.services.storage import get_job_dir, read_job_findings, read_job_metada
 
 router = APIRouter()
 
-RESULTS_DISCLAIMER = (
-    "For reference only. Not medical advice. Clinician must use their judgment."
-)
+RESULTS_DISCLAIMER = "For reference only. Not medical advice. Clinician must use their judgment."
 
 
 @router.get("/results/{job_id}")
