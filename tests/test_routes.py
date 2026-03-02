@@ -5,8 +5,14 @@ import json
 import zipfile
 from pathlib import Path
 
+import pytest
+import torch
 from fastapi.testclient import TestClient
+from torch import nn
+from torchvision.models import resnet18
 
+from app.config import get_settings
+from app.main import create_app
 from app.routes.results import RESULTS_DISCLAIMER
 
 
@@ -74,6 +80,39 @@ def test_upload_valid_zip_returns_accepted(client: TestClient, tmp_path: Path) -
     assert metadata["slice_count"] == 2
 
 
+def test_upload_with_oversized_payload_returns_413(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model_path = tmp_path / "classifier.pt"
+    base_model = resnet18(weights=None)
+    base_model.fc = nn.Linear(base_model.fc.in_features, 1)
+    torch.save(base_model.state_dict(), model_path)
+
+    monkeypatch.setenv("TEMP_DIR", str(tmp_path))
+    monkeypatch.setenv("MODEL_PATH", str(model_path))
+    monkeypatch.setenv("USE_GPU", "false")
+    monkeypatch.setenv("MAX_UPLOAD_SIZE_MB", "0")
+    get_settings.cache_clear()
+
+    app = create_app()
+    with TestClient(app) as isolated_client:
+        response = isolated_client.post(
+            "/upload",
+            files={
+                "file": (
+                    "series.zip",
+                    _zip_payload({"study/slice1.dcm": _dicom_payload()}),
+                    "application/zip",
+                )
+            },
+        )
+
+    get_settings.cache_clear()
+    assert response.status_code == 413
+    assert response.json()["detail"] == "Payload too large."
+
+
 def test_upload_non_dicom_returns_400(client: TestClient) -> None:
     response = client.post(
         "/upload",
@@ -94,6 +133,39 @@ def test_upload_without_file_returns_400(client: TestClient) -> None:
     response = client.post("/upload")
     assert response.status_code == 400
     assert response.json()["detail"] == "No file was uploaded."
+
+
+def test_upload_with_empty_archive_returns_400(client: TestClient) -> None:
+    response = client.post(
+        "/upload",
+        files={
+            "file": (
+                "empty.zip",
+                _zip_payload({}),
+                "application/zip",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Archive has no DICOM files."
+
+
+def test_upload_exceeding_max_slices_returns_400(client: TestClient) -> None:
+    entries = {f"study/slice{i:04d}.dcm": _dicom_payload() for i in range(101)}
+    response = client.post(
+        "/upload",
+        files={
+            "file": (
+                "series.zip",
+                _zip_payload(entries),
+                "application/zip",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Archive exceeds MAX_SLICES" in response.json()["detail"]
 
 
 def test_get_job_returns_status_payload(client: TestClient, tmp_path: Path) -> None:

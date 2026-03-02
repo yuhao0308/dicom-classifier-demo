@@ -49,6 +49,14 @@ def test_load_model_is_cached_for_same_path(tmp_path: Path) -> None:
     assert model_a is model_b
 
 
+def test_load_model_missing_path_raises_file_not_found(tmp_path: Path) -> None:
+    load_model.cache_clear()
+    missing_path = tmp_path / "missing.pt"
+
+    with pytest.raises(FileNotFoundError, match="Model file not found"):
+        load_model(missing_path, use_gpu=False)
+
+
 def test_predict_batch_outputs_expected_shape_and_ranges() -> None:
     module = _TinyClassifier().eval()
     model = InferenceModel(
@@ -118,3 +126,15 @@ def test_run_inference_rejects_invalid_batch_size() -> None:
 
     with pytest.raises(ValueError, match="batch_size must be > 0."):
         run_inference(model, _sample_slices(1), batch_size=0)
+
+
+def test_run_inference_with_empty_slices_returns_empty_results() -> None:
+    module = _TinyClassifier().eval()
+    model = InferenceModel(
+        module=module,
+        target_layer=module.conv,
+        device=torch.device("cpu"),
+        input_size=32,
+    )
+
+    assert run_inference(model, [], batch_size=4) == []

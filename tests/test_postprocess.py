@@ -53,6 +53,17 @@ def test_render_overlay_outputs_rgb_with_expected_shape() -> None:
     assert np.array_equal(overlay[2, 3], np.array([255, 0, 0], dtype=np.uint8))
 
 
+def test_render_overlay_clamps_bbox_out_of_bounds() -> None:
+    slice_array = np.full((5, 6), 80, dtype=np.uint8)
+    bbox = BBox(x=-2, y=-1, width=4, height=4)
+
+    overlay = render_overlay(slice_array, bbox)
+
+    assert overlay.shape == (5, 6, 3)
+    assert np.array_equal(overlay[0, 0], np.array([255, 0, 0], dtype=np.uint8))
+    assert np.array_equal(overlay[2, 1], np.array([255, 0, 0], dtype=np.uint8))
+
+
 def test_postprocess_filters_by_threshold_and_top_k() -> None:
     slice_arrays = [
         np.full((8, 8), 50, dtype=np.uint8),
@@ -82,3 +93,14 @@ def test_postprocess_filters_by_threshold_and_top_k() -> None:
     assert findings[0].bbox == BBox(x=3, y=2, width=2, height=2)
     assert findings[0].finding == "Suspicious region detected in slice 1 (confidence: 0.95)."
     assert findings[0].image.shape == (8, 8, 3)
+
+
+def test_postprocess_returns_empty_when_top_k_is_zero() -> None:
+    slice_arrays = [np.full((8, 8), 100, dtype=np.uint8)]
+    hotspot_cam = np.zeros((8, 8), dtype=np.float32)
+    hotspot_cam[2:4, 2:4] = 1.0
+    inference_results = [SliceResult(slice_index=0, score=0.9, cam=hotspot_cam)]
+
+    findings = postprocess_results(slice_arrays, inference_results, top_k=0)
+
+    assert findings == []

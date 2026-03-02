@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
 import pytest
 from pydicom import Dataset, FileDataset
-from pydicom.dataset import FileMetaDataset
-from pydicom.uid import CTImageStorage, ExplicitVRLittleEndian, generate_uid
 
 from app.services.dicom_parser import (
     apply_windowing,
@@ -17,60 +16,6 @@ from app.services.dicom_parser import (
     strip_phi_tags,
     validate_modality,
 )
-
-
-def _build_test_dataset(
-    pixel_array: np.ndarray,
-    *,
-    modality: str = "CT",
-    instance_number: int | None = None,
-    slice_location: float | None = None,
-    rescale_slope: float = 1.0,
-    rescale_intercept: float = 0.0,
-) -> FileDataset:
-    file_meta = FileMetaDataset()
-    file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
-    file_meta.MediaStorageSOPClassUID = CTImageStorage
-    file_meta.MediaStorageSOPInstanceUID = generate_uid()
-    file_meta.ImplementationClassUID = generate_uid()
-
-    dataset = FileDataset("", {}, file_meta=file_meta, preamble=b"\0" * 128)
-    dataset.SOPClassUID = file_meta.MediaStorageSOPClassUID
-    dataset.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
-    dataset.Modality = modality
-    dataset.PatientName = "Patient^Example"
-    dataset.PatientID = "123456"
-    dataset.PatientBirthDate = "19900101"
-    dataset.PatientSex = "O"
-    dataset.PatientAge = "034Y"
-    dataset.InstitutionName = "Example Hospital"
-    dataset.InstitutionAddress = "123 Main Street"
-    dataset.ReferringPhysicianName = "Referrer^Doc"
-    dataset.StudyDate = "20260228"
-    dataset.StudyTime = "120000"
-    dataset.AccessionNumber = "ACC-1"
-    dataset.Rows = int(pixel_array.shape[0])
-    dataset.Columns = int(pixel_array.shape[1])
-    dataset.SamplesPerPixel = 1
-    dataset.PhotometricInterpretation = "MONOCHROME2"
-    dataset.BitsAllocated = 16
-    dataset.BitsStored = 16
-    dataset.HighBit = 15
-    dataset.PixelRepresentation = 1
-    dataset.RescaleSlope = rescale_slope
-    dataset.RescaleIntercept = rescale_intercept
-    if instance_number is not None:
-        dataset.InstanceNumber = instance_number
-    if slice_location is not None:
-        dataset.SliceLocation = slice_location
-    dataset.PixelData = pixel_array.astype(np.int16).tobytes()
-    dataset.is_implicit_VR = False
-    dataset.is_little_endian = True
-    return dataset
-
-
-def _write_dataset(path: Path, dataset: FileDataset) -> None:
-    dataset.save_as(path, write_like_original=False)
 
 
 def test_strip_phi_tags_removes_phi_and_logs_warning(caplog: pytest.LogCaptureFixture) -> None:
@@ -146,18 +91,22 @@ def test_apply_windowing_converts_to_uint8() -> None:
     assert np.array_equal(windowed, np.array([[0, 128, 255, 255]], dtype=np.uint8))
 
 
-def test_read_slices_reads_and_strips_phi(tmp_path: Path) -> None:
-    dataset_1 = _build_test_dataset(
+def test_read_slices_reads_and_strips_phi(
+    tmp_path: Path,
+    build_test_dataset: Callable[..., FileDataset],
+    write_dataset: Callable[[Path, FileDataset], None],
+) -> None:
+    dataset_1 = build_test_dataset(
         np.array([[-1000, -600], [0, 200]], dtype=np.int16),
         instance_number=1,
     )
-    dataset_2 = _build_test_dataset(
+    dataset_2 = build_test_dataset(
         np.array([[-1200, -500], [50, 150]], dtype=np.int16),
         instance_number=2,
     )
 
-    _write_dataset(tmp_path / "slice_0001.dcm", dataset_1)
-    _write_dataset(tmp_path / "slice_0002.dcm", dataset_2)
+    write_dataset(tmp_path / "slice_0001.dcm", dataset_1)
+    write_dataset(tmp_path / "slice_0002.dcm", dataset_2)
 
     datasets = read_slices(tmp_path)
 
@@ -167,26 +116,34 @@ def test_read_slices_reads_and_strips_phi(tmp_path: Path) -> None:
     assert all("PatientID" not in dataset for dataset in datasets)
 
 
-def test_read_slices_rejects_non_ct(tmp_path: Path) -> None:
-    dataset = _build_test_dataset(np.array([[-1000, 100]], dtype=np.int16), modality="MR")
-    _write_dataset(tmp_path / "slice_0001.dcm", dataset)
+def test_read_slices_rejects_non_ct(
+    tmp_path: Path,
+    build_test_dataset: Callable[..., FileDataset],
+    write_dataset: Callable[[Path, FileDataset], None],
+) -> None:
+    dataset = build_test_dataset(np.array([[-1000, 100]], dtype=np.int16), modality="MR")
+    write_dataset(tmp_path / "slice_0001.dcm", dataset)
 
     with pytest.raises(ValueError, match="Only CT modality is supported."):
         read_slices(tmp_path)
 
 
-def test_parse_series_sorts_and_windows(tmp_path: Path) -> None:
-    first = _build_test_dataset(
+def test_parse_series_sorts_and_windows(
+    tmp_path: Path,
+    build_test_dataset: Callable[..., FileDataset],
+    write_dataset: Callable[[Path, FileDataset], None],
+) -> None:
+    first = build_test_dataset(
         np.array([[-1000, 0], [500, 1000]], dtype=np.int16),
         instance_number=2,
     )
-    second = _build_test_dataset(
+    second = build_test_dataset(
         np.array([[-1300, -600], [150, 300]], dtype=np.int16),
         instance_number=1,
     )
 
-    _write_dataset(tmp_path / "slice_0001.dcm", first)
-    _write_dataset(tmp_path / "slice_0002.dcm", second)
+    write_dataset(tmp_path / "slice_0001.dcm", first)
+    write_dataset(tmp_path / "slice_0002.dcm", second)
 
     parsed = parse_series(tmp_path)
 
