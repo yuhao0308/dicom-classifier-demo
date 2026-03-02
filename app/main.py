@@ -76,7 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     app.state.settings = settings
     ensure_temp_dir(settings)
-    app.state.model = load_model(settings.model_path)
+    app.state.model = load_model(settings.model_path, use_gpu=settings.use_gpu)
     app.state.inference_batch_size = settings.inference_batch_size
     # Startup hook reserved for model loading and temp-dir initialization.
     yield

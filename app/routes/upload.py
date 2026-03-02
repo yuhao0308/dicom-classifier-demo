@@ -13,7 +13,7 @@ from PIL import Image
 
 from app.config import get_settings
 from app.services.dicom_parser import parse_series
-from app.services.inference import DummyModel, load_model, run_inference
+from app.services.inference import InferenceModel, load_model, run_inference
 from app.services.postprocess import postprocess_results
 from app.services.storage import (
     create_job_dir,
@@ -120,7 +120,11 @@ async def upload(
         slice_count=slice_count,
         progress=0,
     )
-    model = getattr(request.app.state, "model", load_model(settings.model_path))
+    model = getattr(
+        request.app.state,
+        "model",
+        load_model(settings.model_path, use_gpu=settings.use_gpu),
+    )
     batch_size = int(
         getattr(request.app.state, "inference_batch_size", settings.inference_batch_size)
     )
@@ -134,7 +138,7 @@ async def upload(
     }
 
 
-def _run_processing_pipeline(job_dir: Path, model: DummyModel, batch_size: int) -> None:
+def _run_processing_pipeline(job_dir: Path, model: InferenceModel, batch_size: int) -> None:
     try:
         update_job_metadata(job_dir, status="processing", progress=25)
         slices = parse_series(job_dir)
