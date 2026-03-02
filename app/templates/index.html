@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DICOM Upload</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+  <main class="page">
+    <header class="upload-header">
+      <h1>DICOM Classifier Demo</h1>
+      <p>Upload a CT series archive (.zip) to start analysis.</p>
+    </header>
+
+    <section class="upload-panel">
+      <form id="upload-form" class="upload-form">
+        <label for="dicom-file" class="input-label">DICOM ZIP Archive</label>
+        <input
+          id="dicom-file"
+          name="file"
+          type="file"
+          accept=".zip,application/zip,application/x-zip-compressed"
+          required
+        >
+
+        <button id="upload-button" type="submit">Upload and Analyze</button>
+      </form>
+
+      <section class="status-panel" aria-live="polite">
+        <p id="status-text">Select a ZIP archive to begin.</p>
+        <progress id="job-progress" max="100" value="0"></progress>
+      </section>
+    </section>
+
+    <footer class="upload-disclaimer">{{ disclaimer }}</footer>
+  </main>
+  <script src="{{ url_for('static', path='app.js') }}" defer></script>
+</body>
+</html>

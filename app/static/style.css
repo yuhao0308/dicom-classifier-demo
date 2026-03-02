@@ -15,6 +15,71 @@ h1 {
   margin: 0;
 }
 
+.upload-header p {
+  color: #475467;
+  margin: 8px 0 0;
+}
+
+.upload-panel {
+  background: #ffffff;
+  border: 1px solid #d0d5dd;
+  border-radius: 12px;
+  margin-top: 20px;
+  padding: 16px;
+}
+
+.upload-form {
+  display: grid;
+  gap: 12px;
+}
+
+.input-label {
+  font-weight: 600;
+}
+
+.upload-form input[type="file"] {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.upload-form button {
+  background: #0f62fe;
+  border: 1px solid #0f62fe;
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 10px 14px;
+}
+
+.upload-form button[disabled] {
+  background: #98a2b3;
+  border-color: #98a2b3;
+  cursor: not-allowed;
+}
+
+.status-panel {
+  border-top: 1px solid #eaecf0;
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.status-panel p {
+  margin: 0 0 8px;
+}
+
+.status-panel progress {
+  width: 100%;
+}
+
+.upload-disclaimer {
+  color: #475467;
+  font-size: 14px;
+  margin-top: 18px;
+}
+
 .job-id {
   color: #475467;
   margin-top: 4px;

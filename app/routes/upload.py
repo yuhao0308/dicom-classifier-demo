@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import HTMLResponse
 from PIL import Image
 
 from app.config import get_settings
@@ -29,12 +30,21 @@ _DICOM_MAGIC_START = 128
 _DICOM_MAGIC_END = 132
 _DICOM_MAGIC = b"DICM"
 _MEDIA_URL_PREFIX = "/job-media"
+_DISCLAIMER = "For reference only. Not medical advice. Clinician must use their judgment."
 
 
 def _has_dicom_magic(payload: bytes) -> bool:
     return (
         len(payload) >= _DICOM_MAGIC_END
         and payload[_DICOM_MAGIC_START:_DICOM_MAGIC_END] == _DICOM_MAGIC
+    )
+
+
+@router.get("/", response_class=HTMLResponse)
+async def upload_page(request: Request) -> HTMLResponse:
+    return request.app.state.templates.TemplateResponse(
+        "index.html",
+        {"request": request, "disclaimer": _DISCLAIMER},
     )
 
 

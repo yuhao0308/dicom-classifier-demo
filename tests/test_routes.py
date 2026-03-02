@@ -28,6 +28,15 @@ def test_health_returns_ok(client: TestClient) -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_upload_page_renders_form_and_disclaimer(client: TestClient) -> None:
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "DICOM Classifier Demo" in response.text
+    assert 'id="upload-form"' in response.text
+    assert RESULTS_DISCLAIMER in response.text
+
+
 def test_upload_valid_zip_returns_accepted(client: TestClient, tmp_path: Path) -> None:
     response = client.post(
         "/upload",
