@@ -35,6 +35,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+exclude = ["data*", "models*"]
 
 [tool.ruff]
 line-length = 99

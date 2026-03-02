@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from app.config import Settings
 
@@ -53,12 +52,12 @@ def write_job_metadata(
     return metadata_path
 
 
-def read_job_metadata(job_dir: Path) -> dict[str, Any]:
+def read_job_metadata(job_dir: Path) -> dict[str, object]:
     metadata_path = job_dir / JOB_METADATA_FILENAME
     return json.loads(metadata_path.read_text(encoding="utf-8"))
 
 
-def update_job_metadata(job_dir: Path, **updates: Any) -> Path:
+def update_job_metadata(job_dir: Path, **updates: object) -> Path:
     metadata = read_job_metadata(job_dir)
     metadata.update(updates)
     metadata_path = job_dir / JOB_METADATA_FILENAME
@@ -70,7 +69,7 @@ def write_job_findings(
     job_dir: Path,
     *,
     total_slices: int,
-    abnormal_slices: list[dict[str, Any]],
+    abnormal_slices: list[dict[str, object]],
 ) -> Path:
     findings_payload = {
         "total_slices": total_slices,
@@ -81,6 +80,6 @@ def write_job_findings(
     return findings_path
 
 
-def read_job_findings(job_dir: Path) -> dict[str, Any]:
+def read_job_findings(job_dir: Path) -> dict[str, object]:
     findings_path = job_dir / JOB_FINDINGS_FILENAME
     return json.loads(findings_path.read_text(encoding="utf-8"))
