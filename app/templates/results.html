@@ -3,40 +3,333 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Results {{ job_id }}</title>
+  <title>Results — {{ job_id }}</title>
   <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
 </head>
 <body>
-  <main class="page">
-    <header>
-      <h1>Analysis Results</h1>
-      <p class="job-id">Job ID: {{ job_id }}</p>
-    </header>
+  <nav class="top-nav">
+    <a href="/" class="top-nav__brand">
+      <span class="top-nav__icon">CT</span>
+      DICOM Classifier
+    </a>
+    <a href="/" class="top-nav__link">New Analysis</a>
+  </nav>
 
-    <section class="disclaimer-banner" role="note" aria-label="Disclaimer">
+  {# ── Section Nav Tabs ── #}
+  {% set flagged_count = abnormal_slices|length %}
+  {% set missed_count = evaluation.missed if (evaluation and evaluation.has_ground_truth) else (missed_slices|length if missed_slices else 0) %}
+  {% set has_gt = evaluation and evaluation.has_ground_truth %}
+  <div class="section-tabs">
+    <div class="section-tabs__inner">
+      {% if has_gt %}
+      <a href="#overview" class="section-tab section-tab--active">Overview</a>
+      {% endif %}
+      <a href="#flagged-slices" class="section-tab">
+        Flagged
+        <span class="section-tab__badge">{{ flagged_count }}</span>
+      </a>
+      {% if missed_count > 0 %}
+      <a href="#missed-slices" class="section-tab">
+        Missed
+        <span class="section-tab__badge section-tab__badge--amber">{{ missed_count }}</span>
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <main class="page">
+    {# ── Header Row ── #}
+    <div class="results-header-row">
+      <div class="results-header-row__left">
+        <h1 class="results-header-row__title">Analysis Results</h1>
+        <span class="results-header-row__meta">Job {{ job_id }} &middot; {{ total_slices }} slices</span>
+      </div>
+      <div class="results-header-row__right">
+        {% if annotation_source and annotation_source.startswith("user_upload") %}
+        <span class="anno-badge anno-badge--success">&#10003; GT: User Upload</span>
+        {% elif annotation_source and annotation_source.startswith("auto:") %}
+        <span class="anno-badge anno-badge--success">
+          &#10003; GT: Auto-discovered
+          {%- if evaluation and evaluation.gt_nodule_count is defined %}
+            ({{ evaluation.gt_nodule_count }} nodule{{ "s" if evaluation.gt_nodule_count != 1 else "" }})
+          {%- endif %}
+        </span>
+        {% else %}
+        <span class="anno-badge anno-badge--none">No Ground Truth</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ── Compact Disclaimer ── #}
+    <section class="disclaimer-compact" role="note" aria-label="Disclaimer">
       {{ disclaimer }}
     </section>
 
-    <section class="summary">
-      <p>Total slices: {{ total_slices }}</p>
-      <p>Abnormal slices: {{ abnormal_slices|length }}</p>
-    </section>
+    {# ── Dashboard Hero Panel ── #}
+    {% if has_gt %}
+    {% set tp = evaluation.true_positives %}
+    {% set fp = evaluation.false_positives %}
+    {% set missed = evaluation.missed %}
+    {% set total_eval = tp + fp + missed %}
+    <section class="dashboard-hero" id="overview">
+      <div class="dashboard-hero__top">
+        {# Left: Donut Chart #}
+        <div class="donut-panel">
+          {% if total_eval > 0 %}
+          {% set tp_pct = (tp / total_eval * 100)|round(1) %}
+          {% set fp_pct = (fp / total_eval * 100)|round(1) %}
+          {% set missed_pct = (100 - tp_pct - fp_pct)|round(1) %}
+          {% set sensitivity = (tp / total_eval * 100)|round|int %}
+          <div class="donut"
+               style="--tp-pct: {{ tp_pct }}; --fp-pct: {{ fp_pct }}; --missed-pct: {{ missed_pct }};">
+            <div class="donut__center">
+              <span class="donut__value">{{ sensitivity }}%</span>
+              <span class="donut__label">Sensitivity</span>
+            </div>
+          </div>
+          {% else %}
+          <div class="donut donut--empty">
+            <div class="donut__center">
+              <span class="donut__value">--</span>
+              <span class="donut__label">No Data</span>
+            </div>
+          </div>
+          {% endif %}
+          <div class="donut-legend">
+            <span class="donut-legend__item"><span class="donut-legend__swatch donut-legend__swatch--tp"></span>True Positive</span>
+            <span class="donut-legend__item"><span class="donut-legend__swatch donut-legend__swatch--fp"></span>False Positive</span>
+            <span class="donut-legend__item"><span class="donut-legend__swatch donut-legend__swatch--missed"></span>Missed</span>
+          </div>
+        </div>
 
+        {# Right: Metrics Grid #}
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <span class="metric-card__value">{{ evaluation.total_slices }}</span>
+            <span class="metric-card__label">Total Slices</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-card__value">{{ evaluation.model_flagged }}</span>
+            <span class="metric-card__label">Model Flagged</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-card__value">{{ evaluation.gt_nodule_count }}</span>
+            <span class="metric-card__label">GT Nodules</span>
+          </div>
+          <div class="metric-card metric-card--tp">
+            <span class="metric-card__value">{{ tp }}</span>
+            <span class="metric-card__label">True Positives</span>
+          </div>
+          <div class="metric-card metric-card--fp">
+            <span class="metric-card__value">{{ fp }}</span>
+            <span class="metric-card__label">False Positives</span>
+          </div>
+          <div class="metric-card metric-card--missed">
+            <span class="metric-card__value">{{ missed }}</span>
+            <span class="metric-card__label">Missed</span>
+          </div>
+        </div>
+      </div>
+
+      {# Bottom: Breakdown Bar #}
+      {% if total_eval > 0 %}
+      <div class="breakdown-section">
+        <span class="breakdown-section__label">Detection Breakdown</span>
+        <div class="breakdown-bar">
+          {% if tp > 0 %}
+          <div class="breakdown-bar__seg breakdown-bar__seg--tp"
+               style="width: {{ tp_pct }}%"
+               title="True Positives: {{ tp }} ({{ tp_pct }}%)">
+            {% if tp_pct > 8 %}{{ tp }}{% endif %}
+          </div>
+          {% endif %}
+          {% if fp > 0 %}
+          <div class="breakdown-bar__seg breakdown-bar__seg--fp"
+               style="width: {{ fp_pct }}%"
+               title="False Positives: {{ fp }} ({{ fp_pct }}%)">
+            {% if fp_pct > 8 %}{{ fp }}{% endif %}
+          </div>
+          {% endif %}
+          {% if missed > 0 %}
+          <div class="breakdown-bar__seg breakdown-bar__seg--missed"
+               style="width: {{ missed_pct }}%"
+               title="Missed: {{ missed }} ({{ missed_pct }}%)">
+            {% if missed_pct > 8 %}{{ missed }}{% endif %}
+          </div>
+          {% endif %}
+        </div>
+        <div class="breakdown-legend">
+          <span>TP: {{ tp }}</span>
+          <span>FP: {{ fp }}</span>
+          <span>Missed: {{ missed }}</span>
+        </div>
+      </div>
+      {% endif %}
+    </section>
+    {% elif evaluation and not evaluation.has_ground_truth %}
+    <section class="dashboard-hero dashboard-hero--simple" id="overview">
+      <p class="dashboard-hero__no-gt">Ground truth annotations not available for this series. Showing model predictions only.</p>
+    </section>
+    {% endif %}
+
+    {# ── Flagged Slices ── #}
+    <h2 class="section-heading" id="flagged-slices">Flagged Slices</h2>
     {% if abnormal_slices %}
-    <section class="findings-grid">
+    <section class="slice-grid">
       {% for item in abnormal_slices %}
-      <article class="finding-card">
-        <img src="{{ item.image_url }}" alt="Annotated slice {{ item.slice_index }}">
-        <div class="finding-content">
-          <h2>Slice {{ item.slice_index }}</h2>
-          <p>{{ item.finding }}</p>
-          <p class="confidence">Confidence: {{ '%.2f'|format(item.confidence) }}</p>
+      {# Determine match type for accent color #}
+      {% set match_type = 'fp' %}
+      {% if not has_gt %}
+        {% set match_type = 'default' %}
+      {% elif item.gt_bbox %}
+        {% set match_type = 'tp' %}
+      {% endif %}
+
+      <article class="slice-card-v2 slice-card-v2--{{ match_type }}" id="slice-{{ item.slice_index }}">
+        <div class="slice-card-v2__header">
+          <h3>Slice {{ item.slice_index }}</h3>
+          <div class="slice-card-v2__header-right">
+            {% if has_gt %}
+              {% if item.gt_bbox %}
+                <span class="match-badge match-badge--tp">Match</span>
+              {% else %}
+                <span class="match-badge match-badge--fp">No GT match</span>
+              {% endif %}
+            {% endif %}
+            <span class="confidence-pill">{{ (item.confidence * 100)|round|int }}%</span>
+          </div>
+        </div>
+
+        <div class="slice-card-v2__body">
+          <div class="slice-card-v2__image-frame">
+            <img src="{{ item.image_url }}" alt="Annotated slice {{ item.slice_index }}">
+          </div>
+
+          <div class="slice-card-v2__details">
+            {# Confidence Gauge #}
+            <div class="conf-gauge">
+              <div class="conf-gauge__header">
+                <span class="conf-gauge__title">Confidence</span>
+                <span class="conf-gauge__value">{{ '%.0f'|format(item.confidence * 100) }}%</span>
+              </div>
+              {% set conf_pct = (item.confidence * 100)|round|int %}
+              <div class="conf-gauge__track">
+                <div class="conf-gauge__fill
+                  {%- if conf_pct >= 80 %} conf-gauge__fill--high
+                  {%- elif conf_pct >= 50 %} conf-gauge__fill--mid
+                  {%- else %} conf-gauge__fill--low{% endif %}"
+                     style="width: {{ conf_pct }}%"></div>
+              </div>
+            </div>
+
+            {# Finding Callout #}
+            <div class="finding-callout">
+              <span class="finding-callout__icon">&#128269;</span>
+              <span>{{ item.finding }}</span>
+            </div>
+
+            {# Metrics Table #}
+            <table class="metrics-table">
+              <tbody>
+                <tr>
+                  <td class="metrics-table__key">Pred BBox</td>
+                  <td class="metrics-table__val">({{ item.bbox.x }}, {{ item.bbox.y }}) {{ item.bbox.width }}&times;{{ item.bbox.height }}px</td>
+                </tr>
+                {% if item.gt_bbox %}
+                <tr>
+                  <td class="metrics-table__key">GT BBox</td>
+                  <td class="metrics-table__val">({{ item.gt_bbox.x }}, {{ item.gt_bbox.y }}) {{ item.gt_bbox.width }}&times;{{ item.gt_bbox.height }}px</td>
+                </tr>
+                <tr>
+                  <td class="metrics-table__key">Nodule ID</td>
+                  <td class="metrics-table__val">{{ item.gt_nodule_id }}</td>
+                </tr>
+                <tr>
+                  <td class="metrics-table__key">Radiologists</td>
+                  <td class="metrics-table__val">{{ item.gt_reader_count }}</td>
+                </tr>
+                {% endif %}
+              </tbody>
+            </table>
+
+            {# IoU Gauge #}
+            {% if has_gt %}
+              {% for ps in evaluation.per_slice %}
+                {% if ps.slice_index == item.slice_index and ps.match_type in ['tp', 'fp'] %}
+                <div class="iou-gauge">
+                  <div class="iou-gauge__header">
+                    <span class="iou-gauge__title">IoU Score</span>
+                    <span class="iou-gauge__value
+                      {%- if ps.iou >= 0.5 %} iou-gauge__value--good
+                      {%- elif ps.iou >= 0.25 %} iou-gauge__value--fair
+                      {%- else %} iou-gauge__value--poor{% endif %}">{{ '%.2f'|format(ps.iou) }}</span>
+                  </div>
+                  <div class="iou-gauge__track">
+                    <div class="iou-gauge__fill
+                      {%- if ps.iou >= 0.5 %} iou-gauge__fill--good
+                      {%- elif ps.iou >= 0.25 %} iou-gauge__fill--fair
+                      {%- else %} iou-gauge__fill--poor{% endif %}"
+                         style="width: {{ (ps.iou * 100)|round|int }}%"></div>
+                    <div class="iou-gauge__markers">
+                      <span style="left:0">0</span>
+                      <span style="left:25%">.25</span>
+                      <span style="left:50%">.50</span>
+                      <span style="left:75%">.75</span>
+                      <span style="left:100%">1.0</span>
+                    </div>
+                  </div>
+                </div>
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+          </div>
         </div>
       </article>
       {% endfor %}
     </section>
     {% else %}
-    <p class="no-findings">No abnormal slices passed the postprocessing threshold.</p>
+    <div class="empty-state">
+      <span class="empty-state__icon">&#9745;</span>
+      <p class="empty-state__text">No abnormal slices were flagged by the model.</p>
+    </div>
+    {% endif %}
+
+    {# ── Missed GT Nodules ── #}
+    {% if missed_slices %}
+    <h2 class="section-heading section-heading--missed" id="missed-slices">Missed Nodules</h2>
+    <section class="slice-grid">
+      {% for item in missed_slices %}
+      <article class="slice-card-v2 slice-card-v2--missed" id="missed-{{ item.slice_index }}">
+        <div class="slice-card-v2__header">
+          <h3>Slice {{ item.slice_index }}</h3>
+          <span class="match-badge match-badge--missed">Missed</span>
+        </div>
+        <div class="slice-card-v2__body">
+          <div class="slice-card-v2__image-frame">
+            <img src="{{ item.image_url }}" alt="Missed nodule on slice {{ item.slice_index }}">
+          </div>
+          <div class="slice-card-v2__details">
+            <div class="finding-callout finding-callout--warn">
+              <span class="finding-callout__icon">&#9888;</span>
+              <span>Model failed to detect this nodule.</span>
+            </div>
+            <table class="metrics-table">
+              <tbody>
+                <tr>
+                  <td class="metrics-table__key">Nodule ID</td>
+                  <td class="metrics-table__val">{{ item.gt_nodule_id }}</td>
+                </tr>
+                <tr>
+                  <td class="metrics-table__key">Radiologists</td>
+                  <td class="metrics-table__val">{{ item.gt_reader_count }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </section>
     {% endif %}
   </main>
 </body>

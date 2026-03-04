@@ -14,13 +14,14 @@ class Settings(BaseSettings):
     )
 
     model_path: Path = Path("models/classifier.pt")
-    max_slices: int = 100
+    max_slices: int = 200
     use_gpu: bool = False
     temp_dir: Path = Path("/tmp/dicom-demo")  # noqa: S108
     temp_retention_seconds: int = 3600
     log_level: str = "INFO"
     max_upload_size_mb: int = 500
     inference_batch_size: int = 8
+    annotation_dir: Path = Path("data")
 
     @property
     def max_upload_size_bytes(self) -> int:

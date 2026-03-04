@@ -65,25 +65,59 @@ def generate_finding(slice_index: int, confidence: float) -> str:
     return f"Suspicious region detected in slice {slice_index} (confidence: {confidence:.2f})."
 
 
-def render_overlay(slice_array: np.ndarray, bbox: BBox) -> np.ndarray:
-    if slice_array.ndim != 2:
-        raise ValueError("slice_array must be a 2D array.")
-
-    grayscale = np.asarray(np.clip(slice_array, 0, 255), dtype=np.uint8)
-    rgb = np.stack((grayscale, grayscale, grayscale), axis=-1)
-
+def _draw_bbox(rgb: np.ndarray, bbox: BBox, color: tuple[int, int, int]) -> None:
+    """Draw an axis-aligned bounding box on an RGB image (in-place)."""
     x_min = max(0, bbox.x)
     y_min = max(0, bbox.y)
     x_max = min(rgb.shape[1] - 1, bbox.x + bbox.width - 1)
     y_max = min(rgb.shape[0] - 1, bbox.y + bbox.height - 1)
 
     if x_min > x_max or y_min > y_max:
-        return rgb
+        return
 
-    rgb[y_min, x_min : x_max + 1] = np.array([255, 0, 0], dtype=np.uint8)
-    rgb[y_max, x_min : x_max + 1] = np.array([255, 0, 0], dtype=np.uint8)
-    rgb[y_min : y_max + 1, x_min] = np.array([255, 0, 0], dtype=np.uint8)
-    rgb[y_min : y_max + 1, x_max] = np.array([255, 0, 0], dtype=np.uint8)
+    c = np.array(color, dtype=np.uint8)
+    rgb[y_min, x_min : x_max + 1] = c
+    rgb[y_max, x_min : x_max + 1] = c
+    rgb[y_min : y_max + 1, x_min] = c
+    rgb[y_min : y_max + 1, x_max] = c
+
+
+def _to_rgb(slice_array: np.ndarray) -> np.ndarray:
+    """Convert a 2D grayscale array to an RGB uint8 image."""
+    if slice_array.ndim != 2:
+        raise ValueError("slice_array must be a 2D array.")
+    grayscale = np.asarray(np.clip(slice_array, 0, 255), dtype=np.uint8)
+    return np.stack((grayscale, grayscale, grayscale), axis=-1)
+
+
+_COLOR_RED = (255, 0, 0)
+_COLOR_GREEN = (0, 200, 0)
+
+
+def render_overlay(slice_array: np.ndarray, bbox: BBox) -> np.ndarray:
+    rgb = _to_rgb(slice_array)
+    _draw_bbox(rgb, bbox, _COLOR_RED)
+    return rgb
+
+
+def render_ground_truth_overlay(slice_array: np.ndarray, gt_bbox: BBox) -> np.ndarray:
+    """Render a CT slice with a green bounding box for ground truth."""
+    rgb = _to_rgb(slice_array)
+    _draw_bbox(rgb, gt_bbox, _COLOR_GREEN)
+    return rgb
+
+
+def render_comparison_overlay(
+    slice_array: np.ndarray,
+    pred_bbox: BBox | None,
+    gt_bbox: BBox | None,
+) -> np.ndarray:
+    """Render a CT slice with both prediction (red) and ground truth (green) boxes."""
+    rgb = _to_rgb(slice_array)
+    if gt_bbox is not None:
+        _draw_bbox(rgb, gt_bbox, _COLOR_GREEN)
+    if pred_bbox is not None:
+        _draw_bbox(rgb, pred_bbox, _COLOR_RED)
     return rgb
 
 

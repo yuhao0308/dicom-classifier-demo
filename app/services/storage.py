@@ -70,11 +70,20 @@ def write_job_findings(
     *,
     total_slices: int,
     abnormal_slices: list[dict[str, object]],
+    evaluation: dict[str, object] | None = None,
+    missed_slices: list[dict[str, object]] | None = None,
+    annotation_source: str | None = None,
 ) -> Path:
-    findings_payload = {
+    findings_payload: dict[str, object] = {
         "total_slices": total_slices,
         "abnormal_slices": abnormal_slices,
     }
+    if evaluation is not None:
+        findings_payload["evaluation"] = evaluation
+    if missed_slices is not None:
+        findings_payload["missed_slices"] = missed_slices
+    if annotation_source is not None:
+        findings_payload["annotation_source"] = annotation_source
     findings_path = job_dir / JOB_FINDINGS_FILENAME
     findings_path.write_text(json.dumps(findings_payload, indent=2), encoding="utf-8")
     return findings_path

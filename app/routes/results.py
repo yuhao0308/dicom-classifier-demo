@@ -41,9 +41,16 @@ def _load_results_payload(job_id: str, request: Request) -> dict[str, object]:
         raise HTTPException(status_code=404, detail="Results not found.")
 
     findings_payload = read_job_findings(job_dir)
+    evaluation = findings_payload.get("evaluation")
+    missed_slices = findings_payload.get("missed_slices", [])
+    annotation_source = findings_payload.get("annotation_source", "none")
+
     return {
         "job_id": job_id,
         "disclaimer": RESULTS_DISCLAIMER,
         "total_slices": findings_payload.get("total_slices", metadata.get("slice_count", 0)),
         "abnormal_slices": findings_payload.get("abnormal_slices", []),
+        "evaluation": evaluation,
+        "missed_slices": missed_slices,
+        "annotation_source": annotation_source,
     }

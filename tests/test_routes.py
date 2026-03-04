@@ -152,7 +152,7 @@ def test_upload_with_empty_archive_returns_400(client: TestClient) -> None:
 
 
 def test_upload_exceeding_max_slices_returns_400(client: TestClient) -> None:
-    entries = {f"study/slice{i:04d}.dcm": _dicom_payload() for i in range(101)}
+    entries = {f"study/slice{i:04d}.dcm": _dicom_payload() for i in range(201)}
     response = client.post(
         "/upload",
         files={
@@ -309,3 +309,125 @@ def test_results_html_page_renders_disclaimer_and_finding(
     assert response.status_code == 200
     assert RESULTS_DISCLAIMER in response.text
     assert "Suspicious region detected in slice 3 (confidence: 0.71)." in response.text
+
+
+def test_upload_with_annotation_file_saves_xml(client: TestClient, tmp_path: Path) -> None:
+    annotation_xml = b"<LidcReadMessage><fake/></LidcReadMessage>"
+    response = client.post(
+        "/upload",
+        files={
+            "file": (
+                "series.zip",
+                _zip_payload(
+                    {
+                        "study/slice1.dcm": _dicom_payload(),
+                    }
+                ),
+                "application/zip",
+            ),
+            "annotation": (
+                "gt.xml",
+                annotation_xml,
+                "text/xml",
+            ),
+        },
+    )
+
+    assert response.status_code == 202
+    job_id = response.json()["job_id"]
+    annotation_path = tmp_path / job_id / "annotations.xml"
+    assert annotation_path.exists()
+    assert annotation_path.read_bytes() == annotation_xml
+
+
+def test_upload_without_annotation_still_works(client: TestClient, tmp_path: Path) -> None:
+    response = client.post(
+        "/upload",
+        files={
+            "file": (
+                "series.zip",
+                _zip_payload(
+                    {
+                        "study/slice1.dcm": _dicom_payload(),
+                    }
+                ),
+                "application/zip",
+            ),
+        },
+    )
+
+    assert response.status_code == 202
+    job_id = response.json()["job_id"]
+    annotation_path = tmp_path / job_id / "annotations.xml"
+    assert not annotation_path.exists()
+
+
+def test_results_include_annotation_source(client: TestClient, tmp_path: Path) -> None:
+    job_id = "job-ann-src"
+    job_dir = tmp_path / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    (job_dir / "meta.json").write_text(
+        json.dumps(
+            {
+                "job_id": job_id,
+                "status": "completed",
+                "progress": 100,
+                "slice_count": 10,
+                "created_at": "2026-03-01T00:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (job_dir / "findings.json").write_text(
+        json.dumps(
+            {
+                "total_slices": 10,
+                "abnormal_slices": [],
+                "annotation_source": "auto:078.xml",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    response = client.get(f"/results/{job_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["annotation_source"] == "auto:078.xml"
+
+
+def test_results_html_shows_annotation_status_banner(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    job_id = "job-ann-banner"
+    job_dir = tmp_path / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    (job_dir / "meta.json").write_text(
+        json.dumps(
+            {
+                "job_id": job_id,
+                "status": "completed",
+                "progress": 100,
+                "slice_count": 5,
+                "created_at": "2026-03-01T00:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (job_dir / "findings.json").write_text(
+        json.dumps(
+            {
+                "total_slices": 5,
+                "abnormal_slices": [],
+                "annotation_source": "user_upload",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    response = client.get(f"/results/{job_id}/view")
+
+    assert response.status_code == 200
+    assert "GT: User Upload" in response.text
+    assert "anno-badge--success" in response.text

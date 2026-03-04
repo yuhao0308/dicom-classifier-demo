@@ -3,37 +3,58 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DICOM Upload</title>
+  <title>DICOM Classifier Demo</title>
   <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
 </head>
 <body>
   <main class="page">
-    <header class="upload-header">
+    <div class="app-header">
+      <div class="app-header__icon">CT</div>
       <h1>DICOM Classifier Demo</h1>
-      <p>Upload a CT series archive (.zip) to start analysis.</p>
-    </header>
+      <p>Upload a CT series archive (.zip) to run classification and detection analysis.</p>
+    </div>
 
-    <section class="upload-panel">
-      <form id="upload-form" class="upload-form">
-        <label for="dicom-file" class="input-label">DICOM ZIP Archive</label>
-        <input
-          id="dicom-file"
-          name="file"
-          type="file"
-          accept=".zip,application/zip,application/x-zip-compressed"
-          required
-        >
+    <div class="card">
+      <form id="upload-form">
+        <div class="drop-zone" id="drop-zone">
+          <div class="drop-zone__icon">&#128193;</div>
+          <div class="drop-zone__label">Drop your DICOM .zip here</div>
+          <div class="drop-zone__hint">or click to browse files</div>
+          <input id="dicom-file" name="file" type="file"
+            accept=".zip,application/zip,application/x-zip-compressed">
+          <div class="drop-zone__filename" id="file-name"></div>
+        </div>
 
-        <button id="upload-button" type="submit">Upload and Analyze</button>
+        <button type="button" class="collapsible-toggle" id="advanced-toggle">
+          <span class="collapsible-toggle__arrow" id="toggle-arrow">&#9654;</span>
+          Ground Truth (optional)
+        </button>
+
+        <div class="collapsible-content" id="advanced-section">
+          <div class="annotation-field">
+            <label for="annotation-file">Annotation XML File</label>
+            <input id="annotation-file" name="annotation" type="file" accept=".xml,text/xml">
+            <div class="annotation-field__help">
+              Provide a LIDC-style XML annotation file to enable ground truth evaluation.
+              If not provided, the system will attempt auto-discovery based on patient ID.
+            </div>
+          </div>
+        </div>
+
+        <button id="upload-button" class="btn btn--primary" type="submit" style="margin-top: 20px">
+          Upload and Analyze
+        </button>
       </form>
 
-      <section class="status-panel" aria-live="polite">
-        <p id="status-text">Select a ZIP archive to begin.</p>
-        <progress id="job-progress" max="100" value="0"></progress>
-      </section>
-    </section>
+      <div class="progress-section" id="progress-section">
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-label" id="progress-label">Preparing...</div>
+      </div>
+    </div>
 
-    <footer class="upload-disclaimer">{{ disclaimer }}</footer>
+    <footer class="page-footer">{{ disclaimer }}</footer>
   </main>
   <script src="{{ url_for('static', path='app.js') }}" defer></script>
 </body>
