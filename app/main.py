@@ -14,7 +14,7 @@ from app.config import Settings, get_settings
 from app.routes.jobs import router as jobs_router
 from app.routes.results import router as results_router
 from app.routes.upload import router as upload_router
-from app.services.inference import load_model
+from app.services.inference import load_mock_model, load_model
 from app.services.storage import ensure_temp_dir
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -76,7 +76,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     app.state.settings = settings
     ensure_temp_dir(settings)
-    app.state.model = load_model(settings.model_path, use_gpu=settings.use_gpu)
+    if settings.use_mock_model or not settings.model_path.exists():
+        app.state.model = load_mock_model()
+    else:
+        app.state.model = load_model(settings.model_path, use_gpu=settings.use_gpu)
     app.state.inference_batch_size = settings.inference_batch_size
     # Startup hook reserved for model loading and temp-dir initialization.
     yield

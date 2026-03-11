@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     model_path: Path = Path("models/classifier.pt")
     max_slices: int = 200
     use_gpu: bool = False
+    use_mock_model: bool = False
     temp_dir: Path = Path("/tmp/dicom-demo")  # noqa: S108
     temp_retention_seconds: int = 3600
     log_level: str = "INFO"

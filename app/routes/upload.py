@@ -21,7 +21,7 @@ from app.services.annotation_parser import (
 )
 from app.services.dicom_parser import parse_series_with_metadata
 from app.services.evaluation import evaluate_results
-from app.services.inference import InferenceModel, load_model, run_inference
+from app.services.inference import InferenceModel, load_mock_model, load_model, run_inference
 from app.services.postprocess import (
     BBox,
     postprocess_results,
@@ -132,11 +132,12 @@ async def upload(
         slice_count=slice_count,
         progress=0,
     )
-    model = getattr(
-        request.app.state,
-        "model",
-        load_model(settings.model_path, use_gpu=settings.use_gpu),
-    )
+    model = getattr(request.app.state, "model", None)
+    if model is None:
+        if settings.use_mock_model or not settings.model_path.exists():
+            model = load_mock_model()
+        else:
+            model = load_model(settings.model_path, use_gpu=settings.use_gpu)
     batch_size = int(
         getattr(
             request.app.state,

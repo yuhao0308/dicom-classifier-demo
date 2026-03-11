@@ -4,11 +4,9 @@ import logging
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 import numpy as np
-import torch
-from torch import Tensor, nn
-from torchvision.models import resnet18
 
 DEFAULT_INFERENCE_BATCH_SIZE = 64
 PATCH_SIZE = 24
@@ -23,9 +21,10 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class InferenceModel:
-    module: nn.Module
-    device: torch.device
+    module: Any  # nn.Module or None (mock mode)
+    device: Any  # torch.device or None (mock mode)
     patch_size: int = PATCH_SIZE
+    mock: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,20 +40,30 @@ class SliceResult:
     y: int  # candidate center y in original slice pixel coords
 
 
+def load_mock_model() -> InferenceModel:
+    """Create a mock model that generates random scores without PyTorch."""
+    LOGGER.info("mock_model_loaded")
+    return InferenceModel(module=None, device=None, patch_size=PATCH_SIZE, mock=True)
+
+
 @lru_cache(maxsize=4)
 def load_model(model_path: Path, *, use_gpu: bool = False) -> InferenceModel:
+    import torch
+    from torch import nn
+    from torchvision.models import resnet18
+
     resolved_path = model_path.expanduser().resolve()
     if not resolved_path.exists():
         raise FileNotFoundError(
             f"Model file not found at '{resolved_path}'. Run scripts/download_model.py first."
         )
 
-    model = _build_classifier()
+    model = _build_classifier(resnet18, nn)
     checkpoint = torch.load(resolved_path, map_location="cpu")
     state_dict = _extract_state_dict(checkpoint)
     model.load_state_dict(state_dict, strict=True)
 
-    device = _resolve_device(use_gpu)
+    device = _resolve_device(use_gpu, torch)
     model.to(device)
     model.eval()
 
@@ -149,6 +158,19 @@ def extract_patch(
     return patch
 
 
+def _predict_patches_mock(
+    n_patches: int,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Generate mock scores — mostly low with occasional high values."""
+    # Base scores: mostly low (normal tissue)
+    scores = rng.beta(0.5, 5.0, size=n_patches).astype(np.float32)
+    # Randomly boost a few to simulate detections (~2% of patches)
+    boost_mask = rng.random(n_patches) < 0.02
+    scores[boost_mask] = rng.uniform(0.6, 0.95, size=int(boost_mask.sum())).astype(np.float32)
+    return scores
+
+
 def predict_patches(
     model: InferenceModel,
     patches: list[np.ndarray],
@@ -159,6 +181,13 @@ def predict_patches(
     """
     if not patches:
         return np.array([], dtype=np.float32)
+
+    if model.mock:
+        rng = np.random.default_rng()
+        return _predict_patches_mock(len(patches), rng)
+
+    import torch
+    from torch import Tensor
 
     tensors: list[Tensor] = []
     for patch in patches:
@@ -187,7 +216,7 @@ def run_inference(
     """Run the full patch-based inference pipeline on a list of CT slices.
 
     For each slice:
-      1. Generate candidate locations via blob detection
+      1. Generate candidate locations via sliding window
       2. Extract patches at each candidate
       3. Classify patches with the model
       4. Return SliceResult for each candidate with score > 0
@@ -235,7 +264,7 @@ def run_inference(
     return all_results
 
 
-def _build_classifier() -> nn.Module:
+def _build_classifier(resnet18_fn: Any, nn: Any) -> Any:
     """Build the modified ResNet-18 for 24x24 patch classification.
 
     Must match the architecture in scripts/kaggle_train.py exactly:
@@ -244,7 +273,7 @@ def _build_classifier() -> nn.Module:
       - fc: Linear(512, 2)
     Feature map progression: 24→24→12→6→3 → AdaptiveAvgPool → 512 → 2
     """
-    model = resnet18(weights=None)
+    model = resnet18_fn(weights=None)
 
     # Replace conv1: 7x7/s2 → 3x3/s1
     model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
@@ -258,7 +287,7 @@ def _build_classifier() -> nn.Module:
     return model
 
 
-def _extract_state_dict(checkpoint: object) -> dict[str, Tensor]:
+def _extract_state_dict(checkpoint: object) -> dict:
     if isinstance(checkpoint, dict):
         if "state_dict" in checkpoint and isinstance(checkpoint["state_dict"], dict):
             return checkpoint["state_dict"]
@@ -267,7 +296,7 @@ def _extract_state_dict(checkpoint: object) -> dict[str, Tensor]:
     raise ValueError("Invalid checkpoint format. Expected a state_dict or {'state_dict': ...}.")
 
 
-def _resolve_device(use_gpu: bool) -> torch.device:
+def _resolve_device(use_gpu: bool, torch: Any) -> Any:
     if use_gpu and torch.cuda.is_available():
         return torch.device("cuda")
     return torch.device("cpu")
