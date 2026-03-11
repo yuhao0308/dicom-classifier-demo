@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.ndimage import label
 
-from app.services.inference import SliceResult
+from app.services.inference import PATCH_SIZE, SliceResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,42 +22,6 @@ class SliceFinding:
     finding: str
     bbox: BBox
     image: np.ndarray
-
-
-def threshold_cam(cam: np.ndarray, percentile: float = 90.0) -> np.ndarray:
-    if cam.ndim != 2:
-        raise ValueError("cam must be a 2D array.")
-    if not 0.0 <= percentile <= 100.0:
-        raise ValueError("percentile must be between 0 and 100.")
-
-    threshold_value = float(np.percentile(cam, percentile))
-    return (cam > threshold_value).astype(np.uint8)
-
-
-def extract_bbox(mask: np.ndarray) -> BBox | None:
-    if mask.ndim != 2:
-        raise ValueError("mask must be a 2D array.")
-
-    binary_mask = np.asarray(mask, dtype=bool)
-    labeled_mask, num_components = label(binary_mask)
-    if num_components == 0:
-        return None
-
-    component_sizes = np.bincount(labeled_mask.ravel())
-    largest_component = int(np.argmax(component_sizes[1:]) + 1)
-    ys, xs = np.where(labeled_mask == largest_component)
-
-    x_min = int(xs.min())
-    x_max = int(xs.max())
-    y_min = int(ys.min())
-    y_max = int(ys.max())
-
-    return BBox(
-        x=x_min,
-        y=y_min,
-        width=(x_max - x_min + 1),
-        height=(y_max - y_min + 1),
-    )
 
 
 def generate_finding(slice_index: int, confidence: float) -> str:
@@ -121,18 +84,58 @@ def render_comparison_overlay(
     return rgb
 
 
+def _bbox_from_candidate(x: int, y: int, patch_size: int = PATCH_SIZE) -> BBox:
+    """Create a bounding box centered on the candidate position."""
+    half = patch_size // 2
+    return BBox(x=x - half, y=y - half, width=patch_size, height=patch_size)
+
+
+def _nms(
+    results: list[SliceResult],
+    radius: int = PATCH_SIZE // 2,
+) -> list[SliceResult]:
+    """Non-maximum suppression: keep only the highest-scoring detection per region.
+
+    For each result (sorted by score descending), suppress any lower-scoring
+    result on the same slice whose center is within `radius` pixels.
+    """
+    kept: list[SliceResult] = []
+    for result in results:
+        suppressed = False
+        for kept_result in kept:
+            if kept_result.slice_index != result.slice_index:
+                continue
+            dx = result.x - kept_result.x
+            dy = result.y - kept_result.y
+            if dx * dx + dy * dy <= radius * radius:
+                suppressed = True
+                break
+        if not suppressed:
+            kept.append(result)
+    return kept
+
+
 def postprocess_results(
     slice_arrays: list[np.ndarray],
     inference_results: list[SliceResult],
     *,
-    confidence_threshold: float = 0.5,
+    confidence_threshold: float = 0.15,
     top_k: int = 10,
 ) -> list[SliceFinding]:
+    """Convert inference results to findings with bounding boxes and overlays.
+
+    Each SliceResult has a candidate position (x, y) — the bbox is derived
+    directly from the patch coordinates centered on that position.
+
+    Applies non-maximum suppression to merge overlapping detections from
+    the sliding window candidate generator.
+    """
     if top_k <= 0:
         return []
 
     selected = [result for result in inference_results if result.score >= confidence_threshold]
     selected.sort(key=lambda result: result.score, reverse=True)
+    selected = _nms(selected)
     selected = selected[:top_k]
 
     findings: list[SliceFinding] = []
@@ -141,11 +144,7 @@ def postprocess_results(
         if result.slice_index < 0 or result.slice_index >= len(slice_arrays):
             raise ValueError("Slice index out of range for provided slice arrays.")
 
-        mask = threshold_cam(result.cam)
-        bbox = extract_bbox(mask)
-        if bbox is None:
-            continue
-
+        bbox = _bbox_from_candidate(result.x, result.y)
         finding_text = generate_finding(result.slice_index, result.score)
         overlay = render_overlay(slice_arrays[result.slice_index], bbox)
         findings.append(

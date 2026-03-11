@@ -225,6 +225,25 @@ def _run_processing_pipeline(
 
         # Run model inference
         inference_results = run_inference(model, slices, batch_size=batch_size)
+
+        # Log score distribution for diagnostics
+        if inference_results:
+            scores = [r.score for r in inference_results]
+            scores_sorted = sorted(scores, reverse=True)
+            LOGGER.info(
+                "inference_score_distribution",
+                extra={
+                    "total_slices": len(scores),
+                    "min": round(min(scores), 4),
+                    "max": round(max(scores), 4),
+                    "mean": round(sum(scores) / len(scores), 4),
+                    "top_10_scores": [round(s, 4) for s in scores_sorted[:10]],
+                    "above_0.5": sum(1 for s in scores if s >= 0.5),
+                    "above_0.3": sum(1 for s in scores if s >= 0.3),
+                    "above_0.2": sum(1 for s in scores if s >= 0.2),
+                },
+            )
+
         findings = postprocess_results(slices, inference_results)
 
         # ── Build GT mapping (SOP UID first, Z-position fallback) ──

@@ -86,7 +86,10 @@ def test_upload_with_oversized_payload_returns_413(
 ) -> None:
     model_path = tmp_path / "classifier.pt"
     base_model = resnet18(weights=None)
-    base_model.fc = nn.Linear(base_model.fc.in_features, 1)
+    base_model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+    base_model.bn1 = nn.BatchNorm2d(64)
+    base_model.maxpool = nn.Identity()
+    base_model.fc = nn.Linear(base_model.fc.in_features, 2)
     torch.save(base_model.state_dict(), model_path)
 
     monkeypatch.setenv("TEMP_DIR", str(tmp_path))
