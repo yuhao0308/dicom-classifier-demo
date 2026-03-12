@@ -27,8 +27,51 @@
   var advancedSection = document.getElementById("advanced-section");
   var toggleArrow = document.getElementById("toggle-arrow");
 
-  if (!form || !fileInput || !uploadButton) {
+  // Tab / sample elements
+  var tabContainer = document.getElementById("input-mode-tabs");
+  var uploadPanel = document.getElementById("upload-panel");
+  var samplePanel = document.getElementById("sample-panel");
+  var sampleSelect = document.getElementById("sample-select");
+  var sampleDescription = document.getElementById("sample-description");
+
+  var currentMode = "upload";
+
+  if (!form || !uploadButton) {
     return;
+  }
+
+  // ── Input mode tabs ──
+  if (tabContainer) {
+    tabContainer.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-mode]");
+      if (!btn) return;
+      var mode = btn.getAttribute("data-mode");
+      if (mode === currentMode) return;
+
+      currentMode = mode;
+
+      // Update tab active state
+      var tabs = tabContainer.querySelectorAll(".tab");
+      for (var i = 0; i < tabs.length; i++) {
+        tabs[i].classList.toggle("tab--active", tabs[i].getAttribute("data-mode") === mode);
+      }
+
+      // Show/hide panels
+      if (uploadPanel) {
+        uploadPanel.classList.toggle("input-panel--hidden", mode !== "upload");
+      }
+      if (samplePanel) {
+        samplePanel.classList.toggle("input-panel--hidden", mode !== "sample");
+      }
+    });
+  }
+
+  // ── Sample description ──
+  if (sampleSelect && sampleDescription) {
+    sampleSelect.addEventListener("change", function () {
+      var desc = (window.__SAMPLE_DESCRIPTIONS__ || {})[sampleSelect.value];
+      sampleDescription.textContent = desc || "";
+    });
   }
 
   // ── Collapsible toggle ──
@@ -66,11 +109,13 @@
     });
   }
 
-  fileInput.addEventListener("change", function () {
-    if (fileInput.files && fileInput.files.length > 0) {
-      showFileName(fileInput.files[0].name);
-    }
-  });
+  if (fileInput) {
+    fileInput.addEventListener("change", function () {
+      if (fileInput.files && fileInput.files.length > 0) {
+        showFileName(fileInput.files[0].name);
+      }
+    });
+  }
 
   function showFileName(name) {
     if (fileNameDisplay) {
@@ -81,7 +126,18 @@
   // ── Form submit ──
   form.addEventListener("submit", function (event) {
     event.preventDefault();
-    if (!fileInput.files || fileInput.files.length === 0) {
+
+    if (currentMode === "sample") {
+      if (!sampleSelect || !sampleSelect.value) {
+        setProgressLabel("Please select a sample dataset.");
+        return;
+      }
+      void startSampleUpload(sampleSelect.value);
+      return;
+    }
+
+    // Upload mode
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
       setProgressLabel("Choose a .zip archive before uploading.");
       return;
     }
@@ -94,6 +150,48 @@
 
     void startUpload(file);
   });
+
+  async function startSampleUpload(sampleId) {
+    setProcessingState(true);
+    showProgress(true);
+    setProgress(0);
+    setProgressLabel("Loading sample dataset...");
+
+    var formData = new FormData();
+    formData.append("sample_id", sampleId);
+
+    try {
+      var uploadResponse = await fetch("/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      var uploadPayload = await uploadResponse.json().catch(function () {
+        return {};
+      });
+
+      if (!uploadResponse.ok) {
+        var detail = uploadPayload.detail || "Failed to load sample dataset.";
+        setProgressLabel(detail);
+        setProcessingState(false);
+        return;
+      }
+
+      var jobId = uploadPayload.job_id;
+      if (!jobId) {
+        setProgressLabel("Upload succeeded but no job ID was returned.");
+        setProcessingState(false);
+        return;
+      }
+
+      setProgressLabel("Sample loaded. Processing started...");
+      setProgress(10);
+      await pollJobUntilDone(jobId);
+    } catch (error) {
+      setProgressLabel("Network error while loading sample.");
+      setProcessingState(false);
+    }
+  }
 
   async function startUpload(file) {
     setProcessingState(true);
@@ -226,9 +324,14 @@
 
   function setProcessingState(isProcessing) {
     uploadButton.disabled = isProcessing;
-    fileInput.disabled = isProcessing;
+    if (fileInput) {
+      fileInput.disabled = isProcessing;
+    }
     if (annotationInput) {
       annotationInput.disabled = isProcessing;
+    }
+    if (sampleSelect) {
+      sampleSelect.disabled = isProcessing;
     }
     uploadButton.textContent = isProcessing ? "Processing..." : "Upload and Analyze";
   }

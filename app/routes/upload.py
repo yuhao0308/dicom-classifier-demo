@@ -44,6 +44,23 @@ _DICOM_MAGIC_END = 132
 _DICOM_MAGIC = b"DICM"
 _MEDIA_URL_PREFIX = "/job-media"
 _DISCLAIMER = "For reference only. Not medical advice. Clinician must use their judgment."
+_SAMPLES_DIR = Path(__file__).resolve().parent.parent / "static" / "samples"
+
+# Available sample datasets (id → display info)
+_SAMPLES: dict[str, dict[str, str]] = {
+    "LIDC-IDRI-0078": {
+        "label": "LIDC-IDRI-0078 (real CT, 10 slices)",
+        "description": "Real chest CT from LIDC-IDRI, trimmed to 10 slices around nodules.",
+    },
+    "Synthetic-Chest-001": {
+        "label": "Synthetic Chest 001 (1 nodule, 10 slices)",
+        "description": "Synthetic CT scan with one simulated pulmonary nodule.",
+    },
+    "Synthetic-Chest-002": {
+        "label": "Synthetic Chest 002 (2 nodules, 10 slices)",
+        "description": "Synthetic CT scan with two simulated pulmonary nodules.",
+    },
+}
 
 
 def _has_dicom_magic(payload: bytes) -> bool:
@@ -53,11 +70,29 @@ def _has_dicom_magic(payload: bytes) -> bool:
     )
 
 
+@router.get("/api/samples")
+async def list_samples() -> list[dict[str, str]]:
+    """Return available sample datasets."""
+    samples = []
+    for sample_id, info in _SAMPLES.items():
+        zip_path = _SAMPLES_DIR / f"{sample_id}.zip"
+        if zip_path.exists():
+            samples.append({"id": sample_id, **info})
+    return samples
+
+
 @router.get("/", response_class=HTMLResponse)
 async def upload_page(request: Request) -> HTMLResponse:
+    # Build sample list for the template
+    samples = []
+    for sample_id, info in _SAMPLES.items():
+        zip_path = _SAMPLES_DIR / f"{sample_id}.zip"
+        if zip_path.exists():
+            samples.append({"id": sample_id, **info})
+
     return request.app.state.templates.TemplateResponse(
         "index.html",
-        {"request": request, "disclaimer": _DISCLAIMER},
+        {"request": request, "disclaimer": _DISCLAIMER, "samples": samples},
     )
 
 
@@ -67,14 +102,25 @@ async def upload(
     background_tasks: BackgroundTasks,
     file: UploadFile | None = File(default=None),
     annotation: UploadFile | None = File(default=None),
+    sample_id: str | None = None,
 ) -> dict[str, str | int]:
-    if file is None:
-        raise HTTPException(status_code=400, detail="No file was uploaded.")
-
     settings = (
         request.app.state.settings if hasattr(request.app.state, "settings") else get_settings()
     )
-    archive_payload = await file.read()
+
+    # Load from sample dataset if sample_id is provided
+    if sample_id:
+        if sample_id not in _SAMPLES:
+            raise HTTPException(status_code=400, detail="Unknown sample dataset.")
+        sample_zip = _SAMPLES_DIR / f"{sample_id}.zip"
+        sample_ann = _SAMPLES_DIR / f"{sample_id}_ann.xml"
+        if not sample_zip.exists():
+            raise HTTPException(status_code=404, detail="Sample dataset not found on server.")
+        archive_payload = sample_zip.read_bytes()
+    elif file is not None:
+        archive_payload = await file.read()
+    else:
+        raise HTTPException(status_code=400, detail="No file was uploaded.")
 
     if not archive_payload:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
@@ -147,9 +193,14 @@ async def upload(
     )
     annotation_dir = Path(getattr(request.app.state, "annotation_dir", settings.annotation_dir))
 
-    # Save user-uploaded annotation XML if provided
+    # Save annotation XML: from sample, user upload, or auto-discovery
     annotation_xml_path: Path | None = None
-    if annotation is not None:
+    if sample_id:
+        sample_ann = _SAMPLES_DIR / f"{sample_id}_ann.xml"
+        if sample_ann.exists():
+            annotation_xml_path = job_dir / "annotations.xml"
+            shutil.copy2(sample_ann, annotation_xml_path)
+    elif annotation is not None:
         annotation_payload = await annotation.read()
         if annotation_payload:
             annotation_xml_path = job_dir / "annotations.xml"

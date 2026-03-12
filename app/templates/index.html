@@ -11,18 +11,39 @@
     <div class="app-header">
       <div class="app-header__icon">CT</div>
       <h1>DICOM Classifier Demo</h1>
-      <p>Upload a CT series archive (.zip) to run classification and detection analysis.</p>
+      <p>Upload a CT series archive (.zip) or choose a sample dataset to run classification and detection analysis.</p>
     </div>
 
     <div class="card">
       <form id="upload-form">
-        <div class="drop-zone" id="drop-zone">
-          <div class="drop-zone__icon">&#128193;</div>
-          <div class="drop-zone__label">Drop your DICOM .zip here</div>
-          <div class="drop-zone__hint">or click to browse files</div>
-          <input id="dicom-file" name="file" type="file"
-            accept=".zip,application/zip,application/x-zip-compressed">
-          <div class="drop-zone__filename" id="file-name"></div>
+
+        <div class="input-mode-tabs" id="input-mode-tabs">
+          <button type="button" class="tab tab--active" data-mode="upload">Upload File</button>
+          <button type="button" class="tab" data-mode="sample">Sample Dataset</button>
+        </div>
+
+        <div class="input-panel" id="upload-panel">
+          <div class="drop-zone" id="drop-zone">
+            <div class="drop-zone__icon">&#128193;</div>
+            <div class="drop-zone__label">Drop your DICOM .zip here</div>
+            <div class="drop-zone__hint">or click to browse files</div>
+            <input id="dicom-file" name="file" type="file"
+              accept=".zip,application/zip,application/x-zip-compressed">
+            <div class="drop-zone__filename" id="file-name"></div>
+          </div>
+        </div>
+
+        <div class="input-panel input-panel--hidden" id="sample-panel">
+          <div class="sample-selector">
+            <label for="sample-select">Choose a sample CT dataset:</label>
+            <select id="sample-select" name="sample_id">
+              <option value="">-- Select a dataset --</option>
+              {% for sample in samples %}
+              <option value="{{ sample.id }}">{{ sample.label }}</option>
+              {% endfor %}
+            </select>
+            <div class="sample-selector__description" id="sample-description"></div>
+          </div>
         </div>
 
         <button type="button" class="collapsible-toggle" id="advanced-toggle">
@@ -56,6 +77,14 @@
 
     <footer class="page-footer">{{ disclaimer }}</footer>
   </main>
+
+  <script>
+    window.__SAMPLE_DESCRIPTIONS__ = {
+      {% for sample in samples %}
+      "{{ sample.id }}": "{{ sample.description }}"{% if not loop.last %},{% endif %}
+      {% endfor %}
+    };
+  </script>
   <script src="{{ url_for('static', path='app.js') }}" defer></script>
 </body>
 </html>

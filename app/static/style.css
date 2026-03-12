@@ -157,6 +157,83 @@ img {
   padding: 24px;
 }
 
+/* ── Input Mode Tabs ── */
+.input-mode-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--color-border-light);
+  padding-bottom: 0;
+}
+
+.tab {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  font-family: var(--font-stack);
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+.tab--active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+/* ── Input Panels ── */
+.input-panel--hidden {
+  display: none;
+}
+
+/* ── Sample Selector ── */
+.sample-selector {
+  padding: 20px;
+  background: var(--color-bg);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.sample-selector label {
+  display: block;
+  font-weight: 500;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.sample-selector select {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: var(--font-stack);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  appearance: auto;
+}
+
+.sample-selector select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.sample-selector__description {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  min-height: 20px;
+}
+
 /* ── Upload Drop Zone ── */
 .drop-zone {
   border: 2px dashed var(--color-border);
