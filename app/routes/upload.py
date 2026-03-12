@@ -7,7 +7,16 @@ import zipfile
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.responses import HTMLResponse
 from PIL import Image
 
@@ -102,7 +111,7 @@ async def upload(
     background_tasks: BackgroundTasks,
     file: UploadFile | None = File(default=None),
     annotation: UploadFile | None = File(default=None),
-    sample_id: str | None = None,
+    sample_id: str | None = Form(default=None),
 ) -> dict[str, str | int]:
     settings = (
         request.app.state.settings if hasattr(request.app.state, "settings") else get_settings()
